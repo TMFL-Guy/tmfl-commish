@@ -711,8 +711,23 @@ async function publish(kind){if(busy)return;busy=true;token=input.value.trim();s
  }
  const label=categories[category.value].find(([key])=>key===kind)?.[1]||kind;
  if(!confirm('Publish '+label+' ('+writes.length+' file'+(writes.length===1?'':'s')+') to the public Fan Portal?')){tell('Canceled.');return}
- let success=0;for(const [file,build] of writes){tell('Publishing '+label+': '+file);const prior=await getFile(file);await putFile(file,build(prior.data||{}),prior.sha);success++}
- tell('Published '+label+' successfully ('+success+' file'+(success===1?'':'s')+'). Fan Portal pages must load these feeds to display updates.');
+ // Independent feeds publish concurrently, with an explicit GitHub read-back check.
+ let completed=0;
+ tell('Publishing '+label+': 0/'+writes.length+' files…');
+ const outcomes=await Promise.allSettled(writes.map(async ([file,build])=>{
+  const prior=await getFile(file);
+  const payload=build(prior.data||{});
+  await putFile(file,payload,prior.sha);
+  // Verify the updated content is actually stored in the Fan Portal repository.
+  const saved=await getFile(file);
+  if(JSON.stringify(saved.data)!==JSON.stringify(payload))throw Error(file+' verification failed');
+  completed++;
+  tell('Publishing '+label+': '+completed+'/'+writes.length+' files verified');
+  return file;
+ }));
+ const failed=outcomes.map((result,i)=>result.status==='rejected'?writes[i][0]+': '+result.reason.message:null).filter(Boolean);
+ if(failed.length)throw Error(completed+'/'+writes.length+' verified; '+failed.join('; '));
+ tell('Published and verified '+label+' ('+completed+' file'+(completed===1?'':'s')+') on GitHub. GitHub Pages may take additional time to deploy.');
  }catch(e){tell('Publishing stopped: '+e.message)}
  finally{token='';input.value='';input.type='password';toggle.textContent='Show Token';toggle.setAttribute('aria-pressed','false');busy=false;selected.disabled=false;category.disabled=false;item.disabled=false}
 }
