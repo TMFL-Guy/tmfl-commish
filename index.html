@@ -682,7 +682,7 @@ function collect(){
 const categories={
  teams:[['draft','Draft'],['rosters','Roster'],['profiles','Team Profiles']],
  league:[['news','News'],['hof','HOF'],['history','History'],['awards','Weekly Awards'],['playoffs','Playoff Management'],['schedule','Schedule'],['results','Results'],['tmsn','TMSN']],
- fans:[['features','Fan Portal Features'],['polls','Fan Poll Manager']]
+ fans:[['features','Fan Portal Features'],['polls','Fan Poll Manager'],['notifications','Notifications']]
 };
 const category=document.getElementById('tmfl-gh-category'),item=document.getElementById('tmfl-gh-item'),selected=document.getElementById('tmfl-gh-selected');
 function updateOptions(){item.innerHTML='';for(const [value,label] of categories[category.value]){const opt=document.createElement('option');opt.value=value;opt.textContent=label;item.appendChild(opt)}}category.onchange=updateOptions;updateOptions();
@@ -706,6 +706,7 @@ async function publish(kind){if(busy)return;busy=true;token=input.value.trim();s
  case 'tmsn':writes.push(['tmfl-tmsn-links.json',()=>d.tmsnLinks],['tmfl-tmsn-highlights.json',()=>d.tmsnHighlights]);break;
  case 'features':writes.push(['tmfl-fan-features.json',()=>({...d.fanFeatures,gotwFormURL:d.gotwFormURL})]);break;
  case 'polls':writes.push(cmsFile('poll-editor'));break;
+ case 'notifications':writes.push(cmsFile('notification-editor'));break;
  default:throw Error('Unknown publishing category');
  }
  const label=categories[category.value].find(([key])=>key===kind)?.[1]||kind;
