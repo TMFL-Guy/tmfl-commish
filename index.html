@@ -644,7 +644,7 @@ document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{tab=b.dataset.
 <p>Publish all commissioner data to the public fan repository. Use a fine-grained token restricted to <strong>TMFL-Guy/fan-tmfl-portal</strong> with Contents: Read and write. Your token is not saved.</p>
 <label for="tmfl-gh-token">GitHub token</label><div class="row"><input id="tmfl-gh-token" type="password" autocomplete="off" placeholder="github_pat_..." style="flex:1"><button id="tmfl-gh-toggle" type="button" aria-pressed="false">Show Token</button></div>
 <p class="muted">Only published news and published CMS entries are included in public feeds. Drafts remain private. Existing results are merged rather than erased.</p>
-<div class="actions"><button id="tmfl-gh-all" type="button">Publish Everything</button><button id="tmfl-gh-results" type="button">Publish Results Only</button><button id="tmfl-gh-news" type="button">Publish News Only</button><button id="tmfl-gh-close" type="button">Close</button></div>
+<div class="row"><label for="tmfl-gh-category">Category</label><select id="tmfl-gh-category"><option value="teams">Teams</option><option value="league">League</option><option value="fans">Fans</option></select></div><div class="row"><label for="tmfl-gh-item">What to publish</label><select id="tmfl-gh-item" style="flex:1"></select></div><div class="actions"><button id="tmfl-gh-selected" type="button">Publish Selected</button><button id="tmfl-gh-close" type="button">Close</button></div>
 <p id="tmfl-gh-status" role="status" aria-live="polite"></p></div></div>
 <script>
 (()=>{
@@ -667,26 +667,43 @@ function collect(){
  const local={};for(let i=0;i<localStorage.length;i++){const key=localStorage.key(i);if(key&&key.startsWith('tmfl-')&&!/prediction|bracket|token|last-published/i.test(key)){try{local[key]=JSON.parse(localStorage.getItem(key))}catch{}}}
  return {results,news,cms,schedule:SCHEDULE.map(g=>({...g})),history:historyEntries,gotwHistory:pastGotwEntries,fanFeatures,gotwFormURL,tmsnLinks:tmsnEditorLinks,tmsnHighlights,playoffResults:playoffOfficial,rosters:tmflEditorRosters,draft:tmflEditorDraft,local};
 }
-async function publish(kind){if(busy)return;busy=true;token=input.value.trim();const buttons=['tmfl-gh-all','tmfl-gh-results','tmfl-gh-news'].map(id=>document.getElementById(id));buttons.forEach(b=>b.disabled=true);
+const categories={
+ teams:[['draft','Draft'],['rosters','Roster'],['profiles','Team Profiles']],
+ league:[['news','News'],['hof','HOF'],['history','History'],['awards','Weekly Awards'],['playoffs','Playoff Management'],['schedule','Schedule'],['results','Results'],['tmsn','TMSN']],
+ fans:[['features','Fan Portal Features'],['polls','Fan Poll Manager']]
+};
+const category=document.getElementById('tmfl-gh-category'),item=document.getElementById('tmfl-gh-item'),selected=document.getElementById('tmfl-gh-selected');
+function updateOptions(){item.innerHTML='';for(const [value,label] of categories[category.value]){const opt=document.createElement('option');opt.value=value;opt.textContent=label;item.appendChild(opt)}}category.onchange=updateOptions;updateOptions();
+async function publish(kind){if(busy)return;busy=true;token=input.value.trim();selected.disabled=true;category.disabled=true;item.disabled=true;
  try{
  if(!token)throw Error('Enter a GitHub token first.');
  tell('Verifying GitHub account…');const me=await request('/user');if(me.login.toLowerCase()!=='tmfl-guy')throw Error('Only TMFL-Guy may publish. Signed in as '+me.login);
  const d=collect(),writes=[];
- if(kind!=='news')writes.push(['tmfl-official-results.json',old=>({...old,...d.results})]);
- if(kind!=='results')writes.push(['tmfl-news.json',old=>({articles:[...(Array.isArray(old?.articles)?old.articles:[]).filter(x=>!d.news.some(y=>y.id===x.id)),...d.news]})]);
- if(kind==='all'){
- writes.push(['tmfl-schedule.json',()=>d.schedule],['tmfl-history.json',()=>({history:d.history,gotwHistory:d.gotwHistory})],['tmfl-rosters.json',()=>d.rosters],['tmfl-draft.json',()=>d.draft],['tmfl-tmsn-links.json',()=>d.tmsnLinks],['tmfl-tmsn-highlights.json',()=>d.tmsnHighlights],['tmfl-playoff-results.json',()=>d.playoffResults],['tmfl-fan-features.json',()=>({...d.fanFeatures,gotwFormURL:d.gotwFormURL})]);
- for(const [key,cfg] of Object.entries(TMFL_CMS_CONFIG))writes.push([cfg.file,()=>({entries:d.cms[key]})]);
+ const cmsFile=(key)=>{const cfg=TMFL_CMS_CONFIG[key];return [cfg.file,()=>({entries:d.cms[key]})]};
+ switch(kind){
+ case 'draft':writes.push(['tmfl-draft.json',()=>d.draft]);break;
+ case 'rosters':writes.push(['tmfl-rosters.json',()=>d.rosters]);break;
+ case 'profiles':writes.push(cmsFile('team-profile-editor'));break;
+ case 'news':writes.push(['tmfl-news.json',old=>({articles:[...(Array.isArray(old?.articles)?old.articles:[]).filter(x=>!d.news.some(y=>y.id===x.id)),...d.news]})]);break;
+ case 'hof':writes.push(cmsFile('hof-editor'));break;
+ case 'history':writes.push(['tmfl-history.json',()=>({history:d.history,gotwHistory:d.gotwHistory})]);break;
+ case 'awards':writes.push(cmsFile('awards-editor'));break;
+ case 'playoffs':writes.push(cmsFile('playoff-manager'),['tmfl-playoff-results.json',()=>d.playoffResults]);break;
+ case 'schedule':writes.push(['tmfl-schedule.json',()=>d.schedule]);break;
+ case 'results':writes.push(['tmfl-official-results.json',old=>({...old,...d.results})]);break;
+ case 'tmsn':writes.push(['tmfl-tmsn-links.json',()=>d.tmsnLinks],['tmfl-tmsn-highlights.json',()=>d.tmsnHighlights]);break;
+ case 'features':writes.push(['tmfl-fan-features.json',()=>({...d.fanFeatures,gotwFormURL:d.gotwFormURL})]);break;
+ case 'polls':writes.push(cmsFile('poll-editor'));break;
+ default:throw Error('Unknown publishing category');
  }
- if(!confirm('Publish '+writes.length+' public data file(s) to '+repo+'? Published content will be visible to everyone.')){tell('Canceled.');return}
- let success=0;for(const [file,build] of writes){tell('Publishing '+(success+1)+'/'+writes.length+': '+file);const prior=await getFile(file);const value=build(prior.data||{});await putFile(file,value,prior.sha);success++}
- tell('Published '+success+' files successfully. GitHub Pages may take a few minutes to update. Note: fan-facing pages must read these feeds to display their content.');
- }catch(e){tell('Publishing stopped: '+e.message+' (files already published in this batch remain committed).')}
- finally{token='';input.value='';input.type='password';toggle.textContent='Show Token';toggle.setAttribute('aria-pressed','false');busy=false;buttons.forEach(b=>b.disabled=false)}
+ const label=categories[category.value].find(([key])=>key===kind)?.[1]||kind;
+ if(!confirm('Publish '+label+' ('+writes.length+' file'+(writes.length===1?'':'s')+') to the public Fan Portal?')){tell('Canceled.');return}
+ let success=0;for(const [file,build] of writes){tell('Publishing '+label+': '+file);const prior=await getFile(file);await putFile(file,build(prior.data||{}),prior.sha);success++}
+ tell('Published '+label+' successfully ('+success+' file'+(success===1?'':'s')+'). Fan Portal pages must load these feeds to display updates.');
+ }catch(e){tell('Publishing stopped: '+e.message)}
+ finally{token='';input.value='';input.type='password';toggle.textContent='Show Token';toggle.setAttribute('aria-pressed','false');busy=false;selected.disabled=false;category.disabled=false;item.disabled=false}
 }
-document.getElementById('tmfl-gh-all').onclick=()=>publish('all');
-document.getElementById('tmfl-gh-results').onclick=()=>publish('results');
-document.getElementById('tmfl-gh-news').onclick=()=>publish('news');
+selected.onclick=()=>publish(item.value);
 })();
 </script>
 </body></html>
