@@ -255,7 +255,7 @@ window.tmflCMSDelete=(key,id)=>{if(!confirm('Delete this entry?'))return;tmflCMS
 window.tmflCMSSaveEntry=key=>{
  const cfg=TMFL_CMS_CONFIG[key],rows=tmflCMSData(key),id=tmflCMSSelection[key]||'cms-'+Date.now()+'-'+Math.random().toString(36).slice(2,8),item={id};
  for(const [name,,type] of cfg.fields){const el=document.getElementById('cms-'+name);item[name]=type==='checkbox'?el.checked:type==='number'?(el.value===''?'':Number(el.value)):el.value.trim()}
- const required=key==='hof-editor'?'name':key==='team-profile-editor'?'team':key==='notification-editor'||key==='poll-editor'||key==='news-plus-editor'?'title':key==='awards-editor'?'award':key==='playoff-manager'?'team':'metric';
+ const required=key==='hof-editor'?'name':key==='team-profile-editor'?'team':key==='notification-editor'||key==='poll-editor'||key==='news-plus-editor'?'title':key==='awards-editor'?'award':key==='playoff-manager'?'team':key==='ir-suspensions-editor'?'player':'metric';
  if(!String(item[required]||'').trim())return alert('Please complete the required '+required+' field.');
  if(key==='poll-editor'&&item.choices.split(/\r?\n/).filter(Boolean).length<2)return alert('Enter at least two poll choices.');
  const idx=rows.findIndex(x=>x.id===id);if(idx<0)rows.push(item);else rows[idx]=item;
