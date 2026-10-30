@@ -658,7 +658,7 @@ tmflSyncNavigation();render();
 <label for="tmfl-gh-token">GitHub token</label><div class="row"><input id="tmfl-gh-token" type="password" autocomplete="off" placeholder="github_pat_..." style="flex:1"><button id="tmfl-gh-toggle" type="button" aria-pressed="false">Show Token</button></div>
 <p class="muted">Publish Selected or Publish All Changes sends saved entries to the Fan Portal, including entries previously marked Draft. Check the verification message before closing. Existing results are merged rather than erased.</p>
 <div class="row"><label for="tmfl-gh-category">Category</label><select id="tmfl-gh-category"><option value="teams">Teams</option><option value="league">League</option><option value="fans">Fans</option></select></div><div class="row"><label for="tmfl-gh-item">What to publish</label><select id="tmfl-gh-item" style="flex:1"></select></div><div class="actions"><button id="tmfl-gh-selected" type="button">Publish Selected</button><button id="tmfl-gh-all" type="button">Publish All Changes</button><button id="tmfl-gh-close" type="button">Close</button></div>
-<p id="tmfl-gh-status" role="status" aria-live="polite"></p></div></div>
+<p class="muted">Publisher version: 2026-10-30 · Commit-confirmed</p><p id="tmfl-gh-status" role="status" aria-live="polite"></p></div></div>
 <script>
 (()=>{
 'use strict';
@@ -668,10 +668,10 @@ document.getElementById('tmfl-gh-publish').onclick=()=>dialog.style.display='gri
 document.getElementById('tmfl-gh-close').onclick=()=>{if(busy)return;dialog.style.display='none';input.value='';input.type='password';toggle.textContent='Show Token';token=''};
 toggle.onclick=()=>{const show=input.type==='password';input.type=show?'text':'password';toggle.textContent=show?'Hide Token':'Show Token';toggle.setAttribute('aria-pressed',String(show))};
 function tell(s){status.textContent=s}
-async function request(url,opts={}){const r=await fetch(root+url,{...opts,headers:{Accept:'application/vnd.github+json',Authorization:'Bearer '+token,'X-GitHub-Api-Version':'2022-11-28',...(opts.headers||{})}});const data=await r.json().catch(()=>({}));if(!r.ok){const e=Error((data.message||r.statusText)+' (HTTP '+r.status+')');e.code=r.status;throw e}return data}
+async function request(url,opts={}){const r=await fetch(root+url,{cache:'no-store',...opts,headers:{Accept:'application/vnd.github+json',Authorization:'Bearer '+token,'X-GitHub-Api-Version':'2022-11-28',...(opts.headers||{})}});const data=await r.json().catch(()=>({}));if(!r.ok){const e=Error((data.message||r.statusText)+' (HTTP '+r.status+')');e.code=r.status;throw e}return data}
 const encode=o=>{const b=new TextEncoder().encode(JSON.stringify(o,null,2)+'\n');let binary='';for(let i=0;i<b.length;i+=8192)binary+=String.fromCharCode(...b.subarray(i,i+8192));return btoa(binary)};
 async function getFile(file){try{const d=await request('/repos/'+repo+'/contents/'+encodeURIComponent(file)+'?ref=main&_='+Date.now());const b=Uint8Array.from(atob(d.content.replace(/\s/g,'')),x=>x.charCodeAt(0));return {sha:d.sha,data:JSON.parse(new TextDecoder().decode(b))}}catch(e){if(e.code===404)return {sha:null,data:null};throw e}}
-async function putFile(file,data,sha){const payload={message:'TMFL commissioner: publish '+file,content:encode(data),branch:'main'};if(sha)payload.sha=sha;return request('/repos/'+repo+'/contents/'+encodeURIComponent(file),{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})}
+async function putFile(file,data,sha){const payload={message:'TMFL commissioner: publish '+file,content:encode(data),branch:'main'};if(sha)payload.sha=sha;const result=await request('/repos/'+repo+'/contents/'+encodeURIComponent(file),{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});if(!result.commit?.sha||!result.content?.sha)throw Error('GitHub did not return a confirmed commit for '+file);return result}
 function collect(){
  if(typeof tab!=='undefined'&&tab==='schedule'&&typeof captureSchedule==='function')captureSchedule();
  const cms={};for(const key of Object.keys(TMFL_CMS_CONFIG)){const rows=tmflCMSData(key);cms[key]=rows.filter(x=>x).map(x=>({...x,published:true}))}
@@ -729,15 +729,10 @@ async function publish(kind){if(busy)return;busy=true;token=input.value.trim();s
     const payload=build(prior.data||{});
     if(equivalent(prior.data,payload)){skipped++;done=true;break}
     try{
-     await putFile(file,payload,prior.sha);
-     // Verify against a fresh GitHub response, not a stale CDN or browser cache.
-     let verified=false;
-     for(let check=0;check<3;check++){
-      const saved=await getFile(file);
-      if(equivalent(saved.data,payload)){verified=true;break}
-      await new Promise(resolve=>setTimeout(resolve,350*(check+1)));
-     }
-     if(!verified)throw Error('GitHub accepted the write but read-back did not match; review this file before retrying');
+     // A successful GitHub Contents PUT includes the committed blob and commit SHA.
+     // Avoid unreliable immediate GET comparisons and JSON key-order mismatches.
+     const committed=await putFile(file,payload,prior.sha);
+     tell('GitHub committed '+file+' at '+committed.commit.sha.slice(0,8));
      updated++;done=true;
     }catch(error){
      if(error.code===409&&attempt<2){await new Promise(resolve=>setTimeout(resolve,500*(attempt+1)));continue}
