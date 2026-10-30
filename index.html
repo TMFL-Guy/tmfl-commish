@@ -634,7 +634,7 @@ window.exportSite=()=>{if(tab==='schedule')captureSchedule();if(tab==='fan-featu
 const PUBLISHED_RESULTS={"W05G01":{"a":0,"h":26,"ot":false},"W05G02":{"a":14,"h":24,"ot":false},"W05G03":{"a":19,"h":6,"ot":false},"W05G04":{"a":14,"h":17,"ot":false},"W05G05":{"a":10,"h":13,"ot":false},"W05G06":{"a":30,"h":9,"ot":false},"W05G11":{"a":19,"h":17,"ot":false},"W05G13":{"a":7,"h":10,"ot":false}};
 const PUBLISHED_PLAYOFF_RESULTS={};
 // A newly published HTML file supplies shared official results. Local admin edits are preserved only if they differ from the last published version.
-const VERSION='tmfl-v3-last-published';let previous=localStorage.getItem(VERSION),current=JSON.stringify(PUBLISHED_RESULTS);if(previous!==current){official={...PUBLISHED_RESULTS};saveOfficial();localStorage.setItem(VERSION,current)}
+// Never overwrite commissioner scores from the old HTML-published subset.\n// Bundled results are initialized earlier, and Save Result persists subsequent edits.\nconst VERSION='tmfl-v3-last-published';
 const HISTORY_VERSION='tmfl-v1-last-published-history';
 if(localStorage.getItem(HISTORY_VERSION)!==JSON.stringify(PUBLISHED_HISTORY)){historyEntries=PUBLISHED_HISTORY;saveHistory();localStorage.setItem(HISTORY_VERSION,JSON.stringify(PUBLISHED_HISTORY))}
 const GOTW_HISTORY_VERSION='tmfl-past-gotw-last-published';
