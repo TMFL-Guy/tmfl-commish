@@ -723,6 +723,7 @@ async function publish(kind){if(busy)return;busy=true;token=input.value.trim();s
  const outcomes=await Promise.allSettled(writes.map(async ([file,build])=>{
   const prior=await getFile(file);
   const payload=build(prior.data||{});
+  if(JSON.stringify(prior.data)===JSON.stringify(payload)){completed++;tell('Publishing '+label+': '+completed+'/'+writes.length+' checked (unchanged skipped)');return file+' (unchanged)'}
   await putFile(file,payload,prior.sha);
   // Verify the updated content is actually stored in the Fan Portal repository.
   const saved=await getFile(file);
