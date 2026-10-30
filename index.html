@@ -34,6 +34,12 @@ const scheduleVersion=JSON.stringify(PUBLISHED_SCHEDULE);
 if(localStorage.getItem('tmfl-v4-schedule-version')!==scheduleVersion){localStorage.setItem('tmfl-v4-schedule-version',scheduleVersion)}
 if(localStorage.getItem(SCHEDULE_STORE)&&Array.isArray(savedSchedule)&&savedSchedule.length&&savedSchedule.every(g=>g&&typeof g.id==='string'&&Number.isInteger(g.week)&&g.week>=1&&g.week<=18&&typeof g.away==='string'&&typeof g.home==='string'))SCHEDULE=savedSchedule;
 for(const g of SCHEDULE){if(!g.slot||g.slot==='Not Listed')g.slot='Not Aired'}
+// Migrate the Halloween Classic TV label without discarding other locally saved schedule edits.
+const halloweenGame=SCHEDULE.find(g=>g.id==='W06G05'&&g.away==='Titans'&&g.home==='Ravens');
+if(halloweenGame&&['Not Aired','Special Edition Matchup'].includes(halloweenGame.slot)){
+ halloweenGame.slot='Special Edition';
+ try{localStorage.setItem(SCHEDULE_STORE,JSON.stringify(SCHEDULE))}catch(e){console.warn('Could not persist Halloween TV slot:',e)}
+}
 let editorWeek=1;
 const persist=()=>localStorage.setItem(STORE,JSON.stringify(state));
 const saveOfficial=()=>localStorage.setItem(OFFICIAL,JSON.stringify(official));
