@@ -605,7 +605,33 @@ const tmflSaveData=()=>{localStorage.setItem(TMFL_ROSTER_EDITOR_STORE,JSON.strin
 function rosterEditorView(){
  const list=Array.isArray(tmflEditorRosters[tmflRosterTeam])?tmflEditorRosters[tmflRosterTeam]:[];
  const options=TEAMS.map(t=>'<option value="'+esc(t)+'" '+(t===tmflRosterTeam?'selected':'')+'>'+esc(t)+'</option>').join('');
- return '<div class="panel"><h2>Roster Editor</h2><p>Edit the roster for any TMFL team. No positions required. You can include optional jersey number, school and experience.</p><label>Team <select onchange="tmflRosterTeam=this.value;render()">'+options+'</select></label><div style="overflow-x:auto"><table><thead><tr><th>Player name</th><th>Jersey #</th><th>School</th><th>Experience</th><th></th></tr></thead><tbody>'+list.map((p,i)=>'<tr><td>'+esc(p.name)+'</td><td>'+esc(p.number||'—')+'</td><td>'+esc(p.school||'—')+'</td><td>'+esc(p.experience||'—')+'</td><td><button onclick="tmflRemoveRosterPlayer('+i+')">Remove</button></td></tr>').join('')+'</tbody></table></div><h3>Add Player</h3><form onsubmit="tmflAddRosterPlayer(event)" class="row"><label>Name <input id="tmfl-roster-name" required></label><label>Jersey # <input id="tmfl-roster-number" placeholder="Optional"></label><label>School <input id="tmfl-roster-school" placeholder="Optional"></label><label>Experience <input id="tmfl-roster-experience" placeholder="Optional"></label><button type="submit">Add Player</button></form><div class="actions"><button onclick="tmflImportPublishedData()">Load Current Published Data</button><button onclick="tmflExportRosters()">Export tmfl-rosters.json</button></div><p class="muted">Upload the exported file to the root of your fan-tmfl-portal GitHub repository. Do not replace index.html for roster updates.</p></div>';
+ return '<div class="panel"><h2>Roster Editor</h2><p>Edit the roster for any TMFL team. No positions required. You can include optional jersey number, school and experience.</p><label>Team <select onchange="tmflRosterTeam=this.value;render()">'+options+'</select></label><div style="overflow-x:auto"><table><thead><tr><th>Player name</th><th>Jersey #</th><th>School</th><th>Experience</th><th></th></tr></thead><tbody>'+list.map((p,i)=>'<tr><td>'+esc(p.name)+'</td><td>'+esc(p.number||'—')+'</td><td>'+esc(p.school||'—')+'</td><td>'+esc(p.experience||'—')+'</td><td><button onclick="tmflRemoveRosterPlayer('+i+')">Remove</button></td></tr>').join('')+'</tbody></table></div><h3>Add Player</h3><form onsubmit="tmflAddRosterPlayer(event)" class="row"><label>Name <input id="tmfl-roster-name" required></label><label>Jersey # <input id="tmfl-roster-number" placeholder="Optional"></label><label>School <input id="tmfl-roster-school" placeholder="Optional"></label><label>Experience <input id="tmfl-roster-experience" placeholder="Optional"></label><button type="submit">Add Player</button></form><div class="panel"><h3>Import Roster Lists</h3><p class="muted">Import team roster lists from a JSON file. Imported teams replace their previous lists; other teams remain unchanged.</p><input type="file" id="tmfl-roster-import-file" accept=".json,application/json"><button type="button" onclick="tmflImportRosterFile()">Import JSON Rosters</button><p id="tmfl-roster-import-status" role="status"></p></div><div class="actions"><button onclick="tmflImportPublishedData()">Load Current Published Data</button><button onclick="tmflExportRosters()">Export tmfl-rosters.json</button></div><p class="muted">Upload the exported file to the root of your fan-tmfl-portal GitHub repository. Do not replace index.html for roster updates.</p></div>';
+}
+async function tmflImportRosterFile(){
+ const input=document.getElementById('tmfl-roster-import-file'),status=document.getElementById('tmfl-roster-import-status');
+ const file=input&&input.files&&input.files[0];
+ if(!file){status.textContent='Choose a JSON file first.';return}
+ try{
+  const parsed=JSON.parse(await file.text());
+  const data=parsed&&typeof parsed==='object'&&!Array.isArray(parsed)&&parsed.rosters?parsed.rosters:parsed;
+  if(!data||typeof data!=='object'||Array.isArray(data))throw Error('Expected team names mapped to player lists.');
+  const entries=Object.entries(data);
+  if(!entries.length)throw Error('No team rosters found.');
+  const unknown=entries.map(([team])=>team).filter(team=>!TEAMS.includes(team));
+  if(unknown.length)throw Error('Unknown teams: '+unknown.join(', '));
+  const normalized={};let total=0;
+  for(const [team,players] of entries){
+   if(!Array.isArray(players))throw Error(team+' must have a player list.');
+   normalized[team]=players.map((p,i)=>{
+    if(typeof p==='string')p={name:p};
+    if(!p||typeof p!=='object'||Array.isArray(p)||typeof p.name!=='string'||!p.name.trim())throw Error('Invalid player in '+team+' at row '+(i+1));
+    return {name:p.name.trim(),number:String(p.number??''),school:String(p.school??p.college??''),experience:String(p.experience??'')};
+   });total+=normalized[team].length;
+  }
+  if(!confirm('Import '+total+' players across '+entries.length+' teams? Existing rosters for these teams will be replaced.'))return;
+  tmflEditorRosters={...tmflEditorRosters,...normalized};
+  tmflSaveData();render();alert('Imported '+total+' players across '+entries.length+' teams.');
+ }catch(error){status.textContent='Import failed: '+error.message}
 }
 function tmflAddRosterPlayer(event){event.preventDefault();const value=id=>document.getElementById(id).value.trim();const player={name:value('tmfl-roster-name'),number:value('tmfl-roster-number'),school:value('tmfl-roster-school'),experience:value('tmfl-roster-experience')};if(!player.name)return;(tmflEditorRosters[tmflRosterTeam]??=[]).push(player);tmflSaveData();render();}
 function tmflRemoveRosterPlayer(i){if(!confirm('Remove this player?'))return;tmflEditorRosters[tmflRosterTeam].splice(i,1);tmflSaveData();render();}
