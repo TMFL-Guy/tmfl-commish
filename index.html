@@ -656,8 +656,8 @@ tmflSyncNavigation();render();
 <div id="tmfl-gh-dialog"><div class="panel"><h2>TMFL · Publish to GitHub</h2>
 <p>Publish all commissioner data to the public fan repository. Use a fine-grained token restricted to <strong>TMFL-Guy/fan-tmfl-portal</strong> with Contents: Read and write. Your token is not saved.</p>
 <label for="tmfl-gh-token">GitHub token</label><div class="row"><input id="tmfl-gh-token" type="password" autocomplete="off" placeholder="github_pat_..." style="flex:1"><button id="tmfl-gh-toggle" type="button" aria-pressed="false">Show Token</button></div>
-<p class="muted">Only published news and published CMS entries are included in public feeds. Drafts remain private. Existing results are merged rather than erased.</p>
-<div class="row"><label for="tmfl-gh-category">Category</label><select id="tmfl-gh-category"><option value="teams">Teams</option><option value="league">League</option><option value="fans">Fans</option></select></div><div class="row"><label for="tmfl-gh-item">What to publish</label><select id="tmfl-gh-item" style="flex:1"></select></div><div class="actions"><button id="tmfl-gh-selected" type="button">Publish Selected</button><button id="tmfl-gh-close" type="button">Close</button></div>
+<p class="muted">Publish Selected or Publish All Changes sends saved entries to the Fan Portal, including entries previously marked Draft. Check the verification message before closing. Existing results are merged rather than erased.</p>
+<div class="row"><label for="tmfl-gh-category">Category</label><select id="tmfl-gh-category"><option value="teams">Teams</option><option value="league">League</option><option value="fans">Fans</option></select></div><div class="row"><label for="tmfl-gh-item">What to publish</label><select id="tmfl-gh-item" style="flex:1"></select></div><div class="actions"><button id="tmfl-gh-selected" type="button">Publish Selected</button><button id="tmfl-gh-all" type="button">Publish All Changes</button><button id="tmfl-gh-close" type="button">Close</button></div>
 <p id="tmfl-gh-status" role="status" aria-live="polite"></p></div></div>
 <script>
 (()=>{
@@ -674,8 +674,8 @@ async function getFile(file){try{const d=await request('/repos/'+repo+'/contents
 async function putFile(file,data,sha){const payload={message:'TMFL commissioner: publish '+file,content:encode(data),branch:'main'};if(sha)payload.sha=sha;return request('/repos/'+repo+'/contents/'+encodeURIComponent(file),{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})}
 function collect(){
  if(typeof tab!=='undefined'&&tab==='schedule'&&typeof captureSchedule==='function')captureSchedule();
- const cms={};for(const key of Object.keys(TMFL_CMS_CONFIG)){const rows=tmflCMSData(key);cms[key]=rows.filter(x=>x&&x.published!==false)}
- const news=tmflNewsArticles.filter(x=>x&&x.published===true);
+ const cms={};for(const key of Object.keys(TMFL_CMS_CONFIG)){const rows=tmflCMSData(key);cms[key]=rows.filter(x=>x).map(x=>({...x,published:true}))}
+ const news=tmflNewsArticles.filter(x=>x).map(x=>({...x,published:true}));
  const results=Object.fromEntries(Object.entries(official||{}).filter(([id,v])=>/^W\d{2}G\d{2}$/.test(id)&&v&&Number.isInteger(Number(v.a))&&Number.isInteger(Number(v.h))));
  const local={};for(let i=0;i<localStorage.length;i++){const key=localStorage.key(i);if(key&&key.startsWith('tmfl-')&&!/prediction|bracket|token|last-published/i.test(key)){try{local[key]=JSON.parse(localStorage.getItem(key))}catch{}}}
  return {results,news,cms,schedule:SCHEDULE.map(g=>({...g})),history:historyEntries,gotwHistory:pastGotwEntries,fanFeatures,gotwFormURL,tmsnLinks:tmsnEditorLinks,tmsnHighlights,playoffResults:playoffOfficial,rosters:tmflEditorRosters,draft:tmflEditorDraft,local};
@@ -694,6 +694,10 @@ async function publish(kind){if(busy)return;busy=true;token=input.value.trim();s
  const d=collect(),writes=[];
  const cmsFile=(key)=>{const cfg=TMFL_CMS_CONFIG[key];return [cfg.file,()=>({entries:d.cms[key]})]};
  switch(kind){
+ case 'all':
+  writes.push(['tmfl-draft.json',()=>d.draft],['tmfl-rosters.json',()=>d.rosters],['tmfl-news.json',old=>({articles:[...(Array.isArray(old?.articles)?old.articles:[]).filter(x=>!d.news.some(y=>y.id===x.id)),...d.news]})],['tmfl-history.json',()=>({history:d.history,gotwHistory:d.gotwHistory})],['tmfl-schedule.json',()=>d.schedule],['tmfl-official-results.json',old=>({...old,...d.results})],['tmfl-playoff-results.json',()=>d.playoffResults],['tmfl-tmsn-links.json',()=>d.tmsnLinks],['tmfl-tmsn-highlights.json',()=>d.tmsnHighlights],['tmfl-fan-features.json',()=>({...d.fanFeatures,gotwFormURL:d.gotwFormURL})]);
+  for(const key of Object.keys(TMFL_CMS_CONFIG))writes.push(cmsFile(key));
+  break;
  case 'draft':writes.push(['tmfl-draft.json',()=>d.draft]);break;
  case 'rosters':writes.push(['tmfl-rosters.json',()=>d.rosters]);break;
  case 'profiles':writes.push(cmsFile('team-profile-editor'));break;
@@ -711,7 +715,7 @@ async function publish(kind){if(busy)return;busy=true;token=input.value.trim();s
  case 'notifications':writes.push(cmsFile('notification-editor'));break;
  default:throw Error('Unknown publishing category');
  }
- const label=categories[category.value].find(([key])=>key===kind)?.[1]||kind;
+ const label=kind==='all'?'All Changes':(categories[category.value].find(([key])=>key===kind)?.[1]||kind);
  if(!confirm('Publish '+label+' ('+writes.length+' file'+(writes.length===1?'':'s')+') to the public Fan Portal?')){tell('Canceled.');return}
  // Independent feeds publish concurrently, with an explicit GitHub read-back check.
  let completed=0;
@@ -733,7 +737,7 @@ async function publish(kind){if(busy)return;busy=true;token=input.value.trim();s
  }catch(e){tell('Publishing stopped: '+e.message)}
  finally{token='';input.value='';input.type='password';toggle.textContent='Show Token';toggle.setAttribute('aria-pressed','false');busy=false;selected.disabled=false;category.disabled=false;item.disabled=false}
 }
-selected.onclick=()=>publish(item.value);
+selected.onclick=()=>publish(item.value);document.getElementById('tmfl-gh-all').onclick=()=>publish('all');
 })();
 </script>
 <script>if('serviceWorker' in navigator && (location.protocol==='https:' || location.hostname==='localhost' || location.hostname==='127.0.0.1')){window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(e=>console.warn('TMFL PWA worker:',e.message)))}</script></body></html>
