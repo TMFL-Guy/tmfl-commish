@@ -738,7 +738,15 @@ async function publish(kind){if(busy)return;busy=true;token=input.value.trim();s
  const cmsFile=(key)=>{const cfg=TMFL_CMS_CONFIG[key];return [cfg.file,()=>({entries:d.cms[key]})]};
  switch(kind){
  case 'all':
-  writes.push(['tmfl-draft.json',()=>d.draft],['tmfl-rosters.json',()=>d.rosters],['tmfl-news.json',old=>({articles:[...(Array.isArray(old?.articles)?old.articles:[]).filter(x=>!d.news.some(y=>y.id===x.id)),...d.news]})],['tmfl-history.json',()=>({history:d.history,gotwHistory:d.gotwHistory})],['tmfl-schedule.json',()=>d.schedule],['tmfl-official-results.json',old=>({...old,...d.results})],['tmfl-playoff-results.json',()=>d.playoffResults],['tmfl-tmsn-links.json',()=>d.tmsnLinks],['tmfl-tmsn-highlights.json',()=>d.tmsnHighlights],['tmfl-fan-features.json',()=>({...d.fanFeatures,gotwFormURL:d.gotwFormURL})]);
+  writes.push(['tmfl-draft.json',()=>d.draft],['tmfl-rosters.json',()=>d.rosters],['tmfl-news.json',old=>({articles:[...(Array.isArray(old?.articles)?old.articles:[]).filter(x=>!d.news.some(y=>y.id===x.id)),...d.news]})],['tmfl-history.json',()=>({history:d.history,gotwHistory:d.gotwHistory})],['tmfl-schedule.json',()=>d.schedule],['tmfl-official-results.json',old=>({...old,...d.results})],['tmfl-playoff-results.json',()=>d.playoffResults],['tmfl-tmsn-links.json',old=>({...old,...d.tmsnLinks})],['tmfl-tmsn-highlights.json',old=>{
+   const merged=new Map((Array.isArray(old)?old:[]).map(h=>[h.fileId||h.id,h]));
+   for(const h of d.tmsnHighlights)merged.set(h.fileId||h.id,h);
+   return [...merged.values()];
+  }],['tmfl-highlights.json',old=>{
+   const merged=new Map((Array.isArray(old?.highlights)?old.highlights:[]).map(h=>[h.fileId||h.id,h]));
+   for(const h of d.tmsnHighlights)merged.set(h.fileId||h.id,h);
+   return {highlights:[...merged.values()]};
+  }],['tmfl-fan-features.json',()=>({...d.fanFeatures,gotwFormURL:d.gotwFormURL})]);
   for(const key of Object.keys(TMFL_CMS_CONFIG))writes.push(cmsFile(key));
   break;
  case 'draft':writes.push(['tmfl-draft.json',()=>d.draft]);break;
@@ -752,7 +760,22 @@ async function publish(kind){if(busy)return;busy=true;token=input.value.trim();s
  case 'playoffs':writes.push(cmsFile('playoff-manager'),['tmfl-playoff-results.json',()=>d.playoffResults]);break;
  case 'schedule':writes.push(['tmfl-schedule.json',()=>d.schedule]);break;
  case 'results':writes.push(['tmfl-official-results.json',old=>({...old,...d.results})]);break;
- case 'tmsn':writes.push(['tmfl-tmsn-links.json',()=>d.tmsnLinks],['tmfl-tmsn-highlights.json',()=>d.tmsnHighlights]);break;
+ case 'tmsn':
+  writes.push(
+   ['tmfl-tmsn-links.json',old=>({...old,...d.tmsnLinks})],
+   ['tmfl-tmsn-highlights.json',old=>{
+    const existing=Array.isArray(old)?old:[];
+    const merged=new Map(existing.map(h=>[h.fileId||h.id,h]));
+    for(const h of d.tmsnHighlights)merged.set(h.fileId||h.id,h);
+    return [...merged.values()];
+   }],
+   ['tmfl-highlights.json',old=>{
+    const existing=Array.isArray(old?.highlights)?old.highlights:[];
+    const merged=new Map(existing.map(h=>[h.fileId||h.id,h]));
+    for(const h of d.tmsnHighlights)merged.set(h.fileId||h.id,h);
+    return {highlights:[...merged.values()]};
+   }]
+  );break;
  case 'features':writes.push(['tmfl-fan-features.json',()=>({...d.fanFeatures,gotwFormURL:d.gotwFormURL})]);break;
  case 'polls':writes.push(cmsFile('poll-editor'));break;
  case 'notifications':writes.push(cmsFile('notification-editor'));break;
