@@ -709,7 +709,7 @@ const TMFL_EDITOR_NAV={
 };
 const tmflCategory=document.getElementById('tmfl-editor-category'),tmflPage=document.getElementById('tmfl-editor-page');
 function tmflFillPages(){tmflPage.replaceChildren();for(const [id,label] of TMFL_EDITOR_NAV[tmflCategory.value]){const option=document.createElement('option');option.value=id;option.textContent=label;tmflPage.appendChild(option)}}
-function tmflSyncNavigation(){let match=Object.entries(TMFL_EDITOR_NAV).find(([,items])=>items.some(([id])=>id===tab));if(!match)match=['misc',TMFL_EDITOR_NAV.misc];if(tmflCategory.value!==match[0]){tmflCategory.value=match[0];tmflFillPages()}tmflPage.value=tab}
+function tmflSyncNavigation(){let match=Object.entries(TMFL_EDITOR_NAV).find(([,items])=>items.some(([id])=>id===tab));if(!match)match=['misc',TMFL_EDITOR_NAV.misc];if(tmflCategory.value!==match[0]||!tmflPage.options.length){tmflCategory.value=match[0];tmflFillPages()}tmflPage.value=tab}
 tmflCategory.onchange=()=>{tmflFillPages();tab=tmflPage.value;render()};
 tmflPage.onchange=()=>{tab=tmflPage.value;render()};
 const tmflOriginalRender=render;render=function(){tmflOriginalRender();tmflSyncNavigation()};
