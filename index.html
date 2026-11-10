@@ -79,8 +79,6 @@ const tmflDivRecord=t=>(tmflDivisionRecordCache||tmflDivisionRecords())[t]||{w:0
 const tmflDivPct=t=>winPct(tmflDivRecord(t));
 const tmflHomeAwayPct=x=>winPct(x);
 const tmflStreak=x=>x.streakCount?x.streakType+x.streakCount:'—';
-const tmflHomeAwayPct=x=>winPct(x);
-const tmflStreak=x=>x.streakCount?x.streakType+x.streakCount:'—';
 const compare=(a,b,r)=>winPct(r[b])-winPct(r[a])||tmflDivPct(b)-tmflDivPct(a)||r[b].pts-r[a].pts||r[b].ps-r[a].ps||r[a].pa-r[b].pa||(r[b].ps-r[b].pa)-(r[a].ps-r[a].pa)||tmflHomeAwayPct(r[b].home)-tmflHomeAwayPct(r[a].home)||tmflHomeAwayPct(r[b].away)-tmflHomeAwayPct(r[a].away)||a.localeCompare(b);
 function seeds(r){let o={};for(const c of ['AFC','NFC']){let winners=Object.entries(DIVS).filter(([d])=>d.startsWith(c)).map(([,ts])=>[...ts].sort((a,b)=>compare(a,b,r))[0]).sort((a,b)=>compare(a,b,r));let wc=TEAMS.filter(t=>conf(t)===c&&!winners.includes(t)).sort((a,b)=>compare(a,b,r)).slice(0,3);o[c]=[...winners,...wc]}return o}
 const fmt=v=>v===null?'—':String(v);
