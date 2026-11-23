@@ -43,6 +43,10 @@ if(localStorage.getItem(SCHEDULE_STORE)&&Array.isArray(savedSchedule)&&savedSche
  }
 }
 for(const g of SCHEDULE){if(!g.slot||g.slot==='Not Listed')g.slot='Not Aired'}
+// Automatically repair duplicate primetime assignments from older saved schedules.
+const tmflPrimetimeSeenOnLoad=new Set();let tmflPrimetimeRepaired=false;
+for(const g of SCHEDULE){if(!['TNF','FNF','SAT','SNF','MNF'].includes(g.slot))continue;const key=g.week+'|'+g.slot;if(tmflPrimetimeSeenOnLoad.has(key)){g.slot='Not Aired';tmflPrimetimeRepaired=true}else tmflPrimetimeSeenOnLoad.add(key)}
+if(tmflPrimetimeRepaired)localStorage.setItem(SCHEDULE_STORE,JSON.stringify(SCHEDULE));
 // Migrate the Halloween Classic TV label without discarding other locally saved schedule edits.
 const halloweenGame=SCHEDULE.find(g=>g.id==='W06G05'&&g.away==='Titans'&&g.home==='Ravens');
 if(halloweenGame&&['Not Aired','Special Edition Matchup'].includes(halloweenGame.slot)){
