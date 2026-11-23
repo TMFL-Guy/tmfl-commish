@@ -42,7 +42,7 @@ if(localStorage.getItem(SCHEDULE_STORE)&&Array.isArray(savedSchedule)&&savedSche
   localStorage.setItem('tmfl-schedule-redistribution-2026-v1','done');
  }
 }
-for(const g of SCHEDULE){if(!g.slot||g.slot==='Not Listed')g.slot='Not Aired'}
+for(const g of SCHEDULE){if(!['TNF','FNF','SAT','SNF','MNF','GOTW','Special Edition'].includes(g.slot))g.slot='Not Aired'}
 // Automatically repair duplicate primetime assignments from older saved schedules.
 const tmflPrimetimeSeenOnLoad=new Set();let tmflPrimetimeRepaired=false;
 for(const g of SCHEDULE){if(!['TNF','FNF','SAT','SNF','MNF'].includes(g.slot))continue;const key=g.week+'|'+g.slot;if(tmflPrimetimeSeenOnLoad.has(key)){g.slot='Not Aired';tmflPrimetimeRepaired=true}else tmflPrimetimeSeenOnLoad.add(key)}
@@ -639,7 +639,7 @@ window.tmflScheduleSlotChanged=select=>{
 function captureSchedule(){
  for(const el of document.querySelectorAll('[data-schedule-id]')){
   const g=SCHEDULE.find(g=>g.id===el.dataset.scheduleId);if(!g)continue;
-  const a=el.querySelector('[data-field="away"]').value,h=el.querySelector('[data-field="home"]').value,slot=el.querySelector('[data-field="slot"]').value;
+  const a=el.querySelector('[data-field="away"]').value,h=el.querySelector('[data-field="home"]').value,rawSlot=el.querySelector('[data-field="slot"]').value,slot=['TNF','FNF','SAT','SNF','MNF','GOTW','Special Edition'].includes(rawSlot)?rawSlot:'Not Aired';
   if(a!==g.away||h!==g.home){delete official[g.id];for(const b of Object.values(state.brackets))delete b.games[g.id]}
   g.away=a;g.home=h;g.slot=slot;g.notes=el.querySelector('[data-field="notes"]').value;
  }
