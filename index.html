@@ -341,7 +341,52 @@ function tmflCMSPublishingView(){
 }
 window.tmflCMSExportAll=()=>download('tmfl-commissioner-content-backup.json',JSON.stringify({version:1,exportedAt:new Date().toISOString(),editors:Object.fromEntries(Object.keys(TMFL_CMS_CONFIG).map(key=>[key,tmflCMSData(key)])),news:tmflNewsArticles},null,2));
 
-function render(){document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));document.getElementById('app').innerHTML=({home:homeView,games:gamesView,standings:standingsView,accuracy:accuracyView,recaps:recapsView,history:historyView,rules:rulesView,"tmsn-editor":tmsnEditorView,"fan-features":fanFeaturesView,"news-editor":tmflNewsEditorView,"hof-editor":()=>tmflCMSView("hof-editor"),"team-profile-editor":()=>tmflCMSView("team-profile-editor"),"ir-suspensions-editor":()=>tmflCMSView("ir-suspensions-editor"),"notification-editor":()=>tmflCMSView("notification-editor"),"poll-editor":()=>tmflCMSView("poll-editor"),"news-plus-editor":()=>tmflCMSView("news-plus-editor"),"awards-editor":()=>tmflCMSView("awards-editor"),"playoff-manager":()=>tmflCMSView("playoff-manager"),"engagement-editor":()=>tmflCMSView("engagement-editor"),"publishing-center":()=>tmflCMSView("publishing-center"),"roster-editor":rosterEditorView,"draft-central":draftEditorView,schedule:scheduleView,admin:adminView,"history-editor":historyEditorView,"final-standings":finalStandingsView,picture:playoffPictureView,playoffs:playoffsView,"playoff-results":playoffResultsView,brackets:bracketsView}[tab])()}
+
+/* TMFL In-Season Cup: isolated from the regular-season schedule. */
+const CUP_STORE='tmfl-cup-editor-v1';
+const CUP_DIVISIONS=DIVS;
+const CUP_TEAMS=TEAMS;
+const CUP_SLOTS=['Not Aired','CUP-GOTW','CUP-PT','CUP-SAT','CUP-SUN','CUP-SF','CUP-FINAL'];
+const cupFresh=()=>({version:1,startWeek:1,pots:[[],[],[],[]],groups:{},games:[],results:{},venue:''});
+let cupData=read(CUP_STORE,cupFresh());
+if(!cupData||!Array.isArray(cupData.games))cupData=cupFresh();
+const cupSave=()=>localStorage.setItem(CUP_STORE,JSON.stringify(cupData));
+const cupEsc=v=>esc(String(v??''));
+const cupGroupNames='ABCDEFGH'.split('');
+function cupIsComplete(){const gs=cupData.games.filter(g=>g.stage==='group');return gs.length===48&&new Set(gs.map(g=>g.id)).size===48&&gs.every(g=>CUP_TEAMS.includes(g.home)&&CUP_TEAMS.includes(g.away)&&g.home!==g.away)&&cupGroupNames.every(k=>{const a=cupData.groups[k]||[];return a.length===4&&cupData.games.filter(g=>g.stage==='group'&&g.group===k).length===6&&a.every(t=>cupData.games.filter(g=>g.group===k&&(g.home===t||g.away===t)).length===3)})}
+function cupDraw(){
+ const pots=cupData.pots.map(p=>p.slice());
+ if(pots.some(p=>p.length!==8)||new Set(pots.flat()).size!==32||pots.flat().some(t=>!CUP_TEAMS.includes(t))){alert('Enter exactly eight unique teams in each of the four pots.');return}
+ for(let trial=0;trial<300;trial++){
+  const groups=Object.fromEntries(cupGroupNames.map(k=>[k,[]]));
+  let success=true;
+  for(const pot of pots){
+   const shuffled=pot.slice().sort(()=>Math.random()-.5);
+   function assign(i,available){if(i===8)return true;const k=cupGroupNames[i];for(const t of available.slice().sort(()=>Math.random()-.5)){if(groups[k].some(x=>div[x]===div[t]))continue;groups[k].push(t);if(assign(i+1,available.filter(x=>x!==t)))return true;groups[k].pop()}return false}
+   if(!assign(0,shuffled)){success=false;break}
+  }
+  if(success){cupData.groups=groups;cupData.games=[];cupSave();render();return}
+ }
+ alert('No valid draw found. Adjust the pots.');
+}
+function cupGenerate(){
+ if(cupGroupNames.some(k=>(cupData.groups[k]||[]).length!==4)){alert('Complete the group draw first.');return}
+ const pairs=[[0,3],[1,2],[0,2],[3,1],[0,1],[2,3]];
+ const games=[];
+ for(let d=0;d<3;d++)for(const k of cupGroupNames){const a=cupData.groups[k];for(let j=0;j<2;j++){let [x,y]=pairs[d*2+j];const home=(d+j)%2?a[y]:a[x],away=(d+j)%2?a[x]:a[y];games.push({id:'CUP-'+k+'-M'+(d+1)+'-'+(j+1),stage:'group',group:k,round:d+1,week:Number(cupData.startWeek)+d,home,away,date:'',slot:'Not Aired',homeScore:null,awayScore:null})}}
+ cupData.games=games;cupSave();render();
+}
+function cupSetPot(i,v){cupData.pots[i]=v.split(/[\n,]+/).map(x=>x.trim()).filter(Boolean);cupSave()}
+function cupSetGame(i,key,v){if(key==='homeScore'||key==='awayScore')cupData.games[i][key]=v===''?null:Number(v);else cupData.games[i][key]=v;cupSave()}
+function cupExport(){if(!cupIsComplete()){alert('All 48 valid group-stage games must be entered before publishing.');return}download('tmfl-in-season-cup.json',JSON.stringify({...cupData,unlocked:true},null,2))}
+function cupEditorView(){
+ const opts=CUP_TEAMS.map(t=>'<option>'+cupEsc(t)+'</option>').join('');
+ return '<div class="panel"><h2>TMFL In-Season Cup Editor</h2><p>Separate 32-team tournament · 8 groups · 48 group games · 7 knockout games. NCAA overtime in every game, no ties. Cup results never affect regular-season standings.</p><p><strong>Fan Portal status:</strong> '+(cupIsComplete()?'All 48 group games entered — ready to publish':'LOCKED — '+cupData.games.filter(g=>g.stage==='group').length+'/48 group games entered')+'</p><label>Starting TMFL week (1–13) <input type="number" min="1" max="13" value="'+cupData.startWeek+'" onchange="cupData.startWeek=Math.max(1,Math.min(13,Number(this.value)||1));cupSave();render()"></label><p>Four seeded pots (one team per line or comma-separated). The draw blocks teams from the same NFL division.</p>'+cupData.pots.map((p,i)=>'<label style="display:block">Pot '+(i+1)+' <textarea rows="4" style="width:100%" onchange="cupSetPot('+i+',this.value)">'+cupEsc(p.join('\n'))+'</textarea></label>').join('')+'<div class="actions"><button onclick="cupDraw()">Draw Groups</button><button onclick="cupGenerate()">Generate 48 Group Games</button><button onclick="cupExport()">Download Cup JSON for Fan Portal</button></div><p class="muted">Publish the downloaded tmfl-in-season-cup.json to the Fan Portal repository root. Fan Portal unlocks automatically once the complete file is live.</p></div>'+
+ cupGroupNames.map(k=>'<div class="panel"><h3>Group '+k+'</h3><p>'+(cupData.groups[k]||[]).map(cupEsc).join(' · ')+'</p></div>').join('')+
+ '<div class="panel"><h3>Group Schedule &amp; Scores</h3>'+cupData.games.map((g,i)=>'<div class="game"><strong>'+cupEsc(g.id)+' · '+cupEsc(g.away)+' @ '+cupEsc(g.home)+'</strong><p>Week '+g.week+' · Group '+g.group+'</p><label>Game date/time <input type="datetime-local" value="'+cupEsc(g.date)+'" onchange="cupSetGame('+i+',\'date\',this.value)"></label><label> TV <select onchange="cupSetGame('+i+',\'slot\',this.value)">'+CUP_SLOTS.map(s=>'<option '+(s===g.slot?'selected':'')+'>'+s+'</option>').join('')+'</select></label><label>Away score <input type="number" min="0" value="'+(g.awayScore??'')+'" onchange="cupSetGame('+i+',\'awayScore\',this.value)"></label><label>Home score <input type="number" min="0" value="'+(g.homeScore??'')+'" onchange="cupSetGame('+i+',\'homeScore\',this.value)"></label></div>').join('')+'</div>';
+}
+
+function render(){document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));document.getElementById('app').innerHTML=({'in-season-cup':cupEditorView,home:homeView,games:gamesView,standings:standingsView,accuracy:accuracyView,recaps:recapsView,history:historyView,rules:rulesView,"tmsn-editor":tmsnEditorView,"fan-features":fanFeaturesView,"news-editor":tmflNewsEditorView,"hof-editor":()=>tmflCMSView("hof-editor"),"team-profile-editor":()=>tmflCMSView("team-profile-editor"),"ir-suspensions-editor":()=>tmflCMSView("ir-suspensions-editor"),"notification-editor":()=>tmflCMSView("notification-editor"),"poll-editor":()=>tmflCMSView("poll-editor"),"news-plus-editor":()=>tmflCMSView("news-plus-editor"),"awards-editor":()=>tmflCMSView("awards-editor"),"playoff-manager":()=>tmflCMSView("playoff-manager"),"engagement-editor":()=>tmflCMSView("engagement-editor"),"publishing-center":()=>tmflCMSView("publishing-center"),"roster-editor":rosterEditorView,"draft-central":draftEditorView,schedule:scheduleView,admin:adminView,"history-editor":historyEditorView,"final-standings":finalStandingsView,picture:playoffPictureView,playoffs:playoffsView,"playoff-results":playoffResultsView,brackets:bracketsView}[tab])()}
 
 // Dashboard and information pages use official results for facts, never unsubmitted fan picks.
 const officialResult=g=>normalize(g,official[g.id]);
@@ -756,7 +801,7 @@ if(!localStorage.getItem(GOTW_HISTORY_STORE)&&PUBLISHED_GOTW_HISTORY.length){pas
 if(!localStorage.getItem(PLAYOFF_STORE)&&Object.keys(PUBLISHED_PLAYOFF_RESULTS).length){playoffOfficial={...PUBLISHED_PLAYOFF_RESULTS};savePlayoffOfficial()}
 const TMFL_EDITOR_NAV={
  teams:[['draft-central','Draft'],['roster-editor','Roster'],['team-profile-editor','Team Profiles'],['ir-suspensions-editor','IR / Suspensions']],
- league:[['news-editor','News'],['hof-editor','HOF'],['history-editor','History'],['awards-editor','Weekly Awards'],['playoff-manager','Playoff Management'],['schedule','Schedule'],['admin','Results'],['tmsn-editor','TMSN']],
+ league:[['in-season-cup','In-Season Cup'],['news-editor','News'],['hof-editor','HOF'],['history-editor','History'],['awards-editor','Weekly Awards'],['playoff-manager','Playoff Management'],['schedule','Schedule'],['admin','Results'],['tmsn-editor','TMSN']],
  fans:[['fan-features','Fan Portal Features'],['poll-editor','Fan Poll Manager']],
  misc:[['home','Home'],['games','Game Predictor'],['standings','Standings'],['accuracy','My Accuracy'],['recaps','Weekly Recaps'],['history','League History'],['rules','Rules & Guide'],['final-standings','Final Standings Predictor'],['picture','Playoff Picture'],['playoffs','Playoff Predictor'],['playoff-results','Playoff Schedule & Results'],['brackets','My Predictions'],['notification-editor','Notification Manager'],['news-plus-editor','News Publishing'],['engagement-editor','Fan Engagement Dashboard'],['publishing-center','Publishing Center']]
 };
