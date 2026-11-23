@@ -652,6 +652,7 @@ function tmflPrimetimeConflict(){
   if(seen.has(key))return 'Week '+g.week+' has multiple '+g.slot+' games ('+seen.get(key)+' and '+g.id+'). Only one '+g.slot+' game is allowed per week.';
   seen.set(key,g.id);
  }
+ for(let week=1;week<=18;week++)for(const slot of TMFL_PRIMETIME_SLOTS){if(!seen.has(week+'|'+slot))return 'Week '+week+' is missing its '+slot+' game. Assign exactly one '+slot+' matchup before saving or publishing.'}
  return '';
 }
 window.saveSchedule=()=>{captureSchedule();const conflict=tmflPrimetimeConflict();if(conflict)return alert(conflict);for(const g of SCHEDULE){if(g.away===g.home)return alert('A team cannot play itself. Check Week '+g.week)}localStorage.setItem(SCHEDULE_STORE,JSON.stringify(SCHEDULE));saveOfficial();persist();render();alert('Schedule saved. Use Publish to GitHub → League → Schedule to update the Fan Portal.')};
