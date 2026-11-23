@@ -374,7 +374,27 @@ function cupCreateBlankSchedule(){
  cupData.games=games;cupSave();render();
 }
 function cupSetPot(i,v){cupData.pots[i]=v.split(/[\n,]+/).map(x=>x.trim()).filter(Boolean);cupSave()}
-function cupSetGame(i,key,v){if(!cupData.games[i])return;if(key==='homeScore'||key==='awayScore')cupData.games[i][key]=v===''?null:Number(v);else if(key==='week')cupData.games[i][key]=Math.max(1,Number(v)||1);else cupData.games[i][key]=v;cupSave()}
+function cupSetGame(i,key,v){
+ const g=cupData.games[i];if(!g)return;
+ if(key==='home'||key==='away'){
+  const next={...g,[key]:v},members=cupData.groups[g.group]||[];
+  if(v&&!members.includes(v)){alert('Choose a team assigned to Group '+g.group+'.');render();return}
+  if(next.home&&next.away){
+   if(next.home===next.away){alert('A team cannot play itself.');render();return}
+   const pair=[next.home,next.away].sort().join('|');
+   if(cupData.games.some((other,j)=>j!==i&&other.group===g.group&&other.home&&other.away&&[other.home,other.away].sort().join('|')===pair)){alert('These teams already play each other in this group. Every pair meets exactly once.');render();return}
+  }
+  for(const t of [next.home,next.away].filter(Boolean)){
+   const played=cupData.games.filter((other,j)=>j!==i&&other.group===g.group&&(other.home===t||other.away===t)).length;
+   if(played>=3){alert(t+' already has three group games.');render();return}
+  }
+  g[key]=v;cupSave();render();return;
+ }
+ if(key==='homeScore'||key==='awayScore')g[key]=v===''?null:Number(v);
+ else if(key==='week')g[key]=Math.max(1,Number(v)||1);
+ else g[key]=v;
+ cupSave();
+}
 function cupExport(){if(!cupIsComplete()){alert('All 48 valid group-stage games must be entered before publishing.');return}download('tmfl-in-season-cup.json',JSON.stringify({...cupData,unlocked:true},null,2))}
 
 function tmflCupBracket(d){
@@ -397,9 +417,10 @@ function cupEditorView(){
  const groups=cupGroupNames.map(k=>{
   const members=(cupData.groups[k]||[]).filter(Boolean);
   const choices=value=>'<option value="">Select team</option>'+members.map(t=>'<option value="'+cupEsc(t)+'" '+(t===value?'selected':'')+'>'+cupEsc(t)+'</option>').join('');
+  const counts=members.map(t=>{const n=cupData.games.filter(g=>g.group===k&&(g.home===t||g.away===t)).length;return '<span style="display:inline-block;margin:4px;padding:5px 9px;border:1px solid #777;border-radius:5px">'+cupEsc(t)+': '+n+'/3 games'+(n===3?' (complete)':'')+'</span>'}).join('');
   const assignments=Array.from({length:4},(_,i)=>'<label style="display:inline-block;margin:8px">Team '+(i+1)+' <select onchange="cupSetGroup(\''+k+'\','+i+',this.value);render()">'+teamOptions((cupData.groups[k]||[])[i])+'</select></label>').join('');
   const fixtures=Array.from({length:6},(_,j)=>{const g=cupGroupGame(k,j+1),i=cupData.games.indexOf(g);return '<div class="game" style="padding:10px;margin:8px 0"><strong>'+g.id+'</strong> <label>Away <select onchange="cupSetGame('+i+',\'away\',this.value)">'+choices(g.away)+'</select></label> <label>Home <select onchange="cupSetGame('+i+',\'home\',this.value)">'+choices(g.home)+'</select></label> <label>Week <input type="number" min="1" max="18" value="'+g.week+'" onchange="cupSetGame('+i+',\'week\',this.value)" style="width:65px"></label> <label>Date/time <input type="datetime-local" value="'+cupEsc(g.date)+'" onchange="cupSetGame('+i+',\'date\',this.value)"></label> <label>TV <select onchange="cupSetGame('+i+',\'slot\',this.value)">'+CUP_SLOTS.map(t=>'<option '+(t===g.slot?'selected':'')+'>'+t+'</option>').join('')+'</select></label> <label>Away score <input type="number" min="0" value="'+(g.awayScore??'')+'" onchange="cupSetGame('+i+',\'awayScore\',this.value)" style="width:65px"></label> <label>Home score <input type="number" min="0" value="'+(g.homeScore??'')+'" onchange="cupSetGame('+i+',\'homeScore\',this.value)" style="width:65px"></label></div>'}).join('');
-  return '<div class="panel"><h3>Group '+k+'</h3><p>Assign four teams, then choose the matchups for GRP'+k+'01–GRP'+k+'06.</p>'+assignments+'<h4>Group '+k+' Games</h4>'+fixtures+'</div>';
+  return '<div class="panel"><h3>Group '+k+'</h3><p>Assign four teams, then choose the matchups for GRP'+k+'01–GRP'+k+'06.</p>'+assignments+'<p>Each team plays exactly three games, against each of the other teams once.</p><div>'+counts+'</div><h4>Group '+k+' Games</h4>'+fixtures+'</div>';
  }).join('');
  return '<div class="panel"><h2>TMFL In-Season Cup Editor</h2><p>Manual group assignments and game matchups · 8 groups · 48 group games · 31 knockout games.</p><p><strong>Fan Portal schedule status:</strong> '+(cupIsComplete()?'Ready to publish':'Incomplete — assign six unique matchups per group, with each team playing three games')+'</p><label>Starting TMFL week (1–10) <input type="number" min="1" max="10" value="'+cupData.startWeek+'" onchange="cupData.startWeek=Math.max(1,Math.min(10,Number(this.value)||1));cupSave();render()"></label><p>Each group has six individually editable games. Home and away dropdowns show only that group\'s assigned teams.</p><button onclick="cupExport()">Download Cup JSON</button><p class="muted">Publish via Publish to GitHub → League → In-Season Cup.</p></div>'+groups+tmflCupBracketHTML(cupData,true);
 }
