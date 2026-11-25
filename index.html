@@ -827,7 +827,7 @@ async function tmflImportRosterFile(){
   if(!data||typeof data!=='object'||Array.isArray(data))throw Error('Expected team names mapped to player lists.');
   const entries=Object.entries(data);
   if(!entries.length)throw Error('No team rosters found.');
-  const unknown=entries.map(([team])=>team).filter(team=>!TEAMS.includes(team));
+  const unknown=entries.map(([team])=>team).filter(team=>!PROFILE_TEAMS.includes(team));
   if(unknown.length)throw Error('Unknown teams: '+unknown.join(', '));
   const normalized={};let total=0;
   for(const [team,players] of entries){
