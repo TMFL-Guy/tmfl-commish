@@ -383,7 +383,7 @@ window.tmflCMSExportAll=()=>download('tmfl-commissioner-content-backup.json',JSO
 /* TMFL In-Season Cup: isolated from the regular-season schedule. */
 const CUP_STORE='tmfl-cup-editor-v1';
 const CUP_DIVISIONS=DIVS;
-const CUP_TEAMS=TEAMS;
+const CUP_TEAMS=PROFILE_TEAMS;
 const CUP_SLOTS=['Group GOTW','Cup Semifinal','Cup Final','First Round GOTW','Quarterfinal GOTW','Primetime'];
 const cupSlotLabel=v=>({'CUP-GOTW':'Group GOTW','CUP-PT':'Primetime','CUP-SAT':'Primetime','CUP-SUN':'Primetime','CUP-SF':'Cup Semifinal','CUP-FINAL':'Cup Final','Not Aired':''}[v]||v||'');
 const cupFresh=()=>({version:1,startWeek:1,pots:[[],[],[],[]],groups:{},games:[],results:{},venue:''});
@@ -392,29 +392,20 @@ if(!cupData||!Array.isArray(cupData.games))cupData=cupFresh();
 const cupSave=()=>localStorage.setItem(CUP_STORE,JSON.stringify(cupData));
 const cupEsc=v=>esc(String(v??''));
 const cupGroupNames='ABCDEFGH'.split('');
-function cupIsComplete(){const gs=cupData.games.filter(g=>g.stage==='group');return gs.length===48&&new Set(gs.map(g=>g.id)).size===48&&gs.every(g=>CUP_TEAMS.includes(g.home)&&CUP_TEAMS.includes(g.away)&&g.home!==g.away)&&cupGroupNames.every(k=>{const a=cupData.groups[k]||[];const fixtures=gs.filter(g=>g.group===k);return a.length===4&&fixtures.length===6&&fixtures.every(g=>a.includes(g.home)&&a.includes(g.away))&&a.every(t=>fixtures.filter(g=>g.home===t||g.away===t).length===3)&&new Set(fixtures.map(g=>[g.home,g.away].sort().join('|'))).size===6})}
-function cupEnsureGroupGames(){cupData.games=cupData.games||[];for(const k of cupGroupNames)for(let j=1;j<=6;j++){const id='GRP'+k+String(j).padStart(2,'0');let g=cupData.games.find(x=>x.stage==='group'&&x.group===k&&(x.id===id||x.id==='CUP-'+k+'-M'+Math.ceil(j/2)+'-'+((j-1)%2+1)));if(g){g.id=id;continue}cupData.games.push({id,stage:'group',group:k,round:Math.ceil(j/2),week:Number(cupData.startWeek)+Math.ceil(j/2)-1,home:'',away:'',date:'',slot:'',homeScore:null,awayScore:null})}}
-function cupGroupGame(k,j){cupEnsureGroupGames();return cupData.games.find(g=>g.id==='GRP'+k+String(j).padStart(2,'0'))}
-function cupSetGroup(k,i,v){cupData.groups=cupData.groups||{};const g=(cupData.groups[k]||['','','','']).slice(),previous=g[i];g[i]=v;cupData.groups[k]=g;if(previous!==v){cupEnsureGroupGames();for(const game of cupData.games.filter(x=>x.group===k)){if(game.home===previous)game.home='';if(game.away===previous)game.away=''}}cupSave()}
-function cupGroupValid(){const t=cupGroupNames.flatMap(k=>cupData.groups[k]||[]);return t.length===32&&t.every(x=>CUP_TEAMS.includes(x))&&new Set(t).size===32}
-function cupGenerate(){
- if(!cupGroupValid()){alert('Assign 32 unique teams to the eight groups first.');return}
- if(cupData.games.some(g=>g.stage==='group')&&!confirm('Replace existing group games and scores?'))return;
- const pairs=[[0,3],[1,2],[0,2],[3,1],[0,1],[2,3]],games=[];
- for(let d=0;d<3;d++)for(const k of cupGroupNames){const teams=cupData.groups[k];for(let j=0;j<2;j++){const [x,y]=pairs[d*2+j],home=(d+j)%2?teams[y]:teams[x],away=(d+j)%2?teams[x]:teams[y];games.push({id:'CUP-'+k+'-M'+(d+1)+'-'+(j+1),stage:'group',group:k,round:d+1,week:Number(cupData.startWeek)+d,home,away,date:'',slot:'',homeScore:null,awayScore:null})}}
- cupData.games=games;cupSave();render();
-}
-function cupCreateBlankSchedule(){
- if(cupData.games.some(g=>g.stage==='group')&&!confirm('Replace existing group games and scores with blank editable fixtures?'))return;
- const games=[];
- for(let d=0;d<3;d++)for(const k of cupGroupNames)for(let j=0;j<2;j++)games.push({id:'CUP-'+k+'-M'+(d+1)+'-'+(j+1),stage:'group',group:k,round:d+1,week:Number(cupData.startWeek)+d,home:'',away:'',date:'',slot:'Not Aired',homeScore:null,awayScore:null});
- cupData.games=games;cupSave();render();
-}
+function cupSize(k){return (cupData.groups[k]||['','','','']).length}
+function cupRequired(k){const n=cupSize(k);return n*(n-1)/2}
+function cupScored(g){return g.homeScore!=null||g.awayScore!=null}
+function cupGroupValid(){const t=cupGroupNames.flatMap(k=>cupData.groups[k]||[]);return cupGroupNames.every(k=>cupSize(k)>=2)&&t.length>=32&&t.every(x=>CUP_TEAMS.includes(x))&&new Set(t).size===t.length&&TEAMS.every(t0=>t.includes(t0))}
+function cupIsComplete(){const gs=cupData.games.filter(g=>g.stage==='group');return cupGroupValid()&&new Set(gs.map(g=>g.id)).size===gs.length&&gs.length===cupGroupNames.reduce((n,k)=>n+cupRequired(k),0)&&cupGroupNames.every(k=>{const a=cupData.groups[k],f=gs.filter(g=>g.group===k);return f.length===cupRequired(k)&&f.every(g=>a.includes(g.home)&&a.includes(g.away)&&g.home!==g.away)&&new Set(f.map(g=>[g.home,g.away].sort().join('|'))).size===f.length})}
+function cupEnsureGroupGames(){for(const k of cupGroupNames){const existing=cupData.games.filter(g=>g.stage==='group'&&g.group===k);for(let j=1;j<=cupRequired(k);j++){const id='GRP'+k+String(j).padStart(2,'0');let g=existing.find(x=>x.id===id||x.id==='CUP-'+k+'-M'+Math.ceil(j/2)+'-'+((j-1)%2+1));if(g){g.id=id;continue}cupData.games.push({id,stage:'group',group:k,round:Math.ceil(j/2),week:Number(cupData.startWeek)+Math.ceil(j/2)-1,home:'',away:'',date:'',slot:'',homeScore:null,awayScore:null})}}}
+function cupGroupGame(k,j){return cupData.games.find(g=>g.id==='GRP'+k+String(j).padStart(2,'0'))}
+function cupSetGroup(k,i,v){const a=(cupData.groups[k]||['','','','']).slice(),old=a[i];if(v===old)return;if(v&&cupGroupNames.some(x=>(cupData.groups[x]||[]).includes(v))){alert('Team already assigned.');return}if(old&&cupData.games.some(g=>g.group===k&&cupScored(g)&&(g.home===old||g.away===old))){alert('Cannot change a team with a recorded score.');return}a[i]=v;cupData.groups[k]=a;for(const g of cupData.games.filter(g=>g.group===k)){if(old&&g.home===old)g.home='';if(old&&g.away===old)g.away=''}cupSave()}
+function cupResize(k,delta){const a=(cupData.groups[k]||['','','','']).slice();if(delta>0){if(a.length>=CUP_TEAMS.length)return;a.push('')}else{if(a.length<=2||a[a.length-1]){alert('Clear the last team slot before removing it.');return}const n=(a.length-1)*(a.length-2)/2;const excess=cupData.games.filter(g=>g.group===k&&Number(g.id.slice(4))>n);if(excess.some(g=>cupScored(g)||g.home||g.away)){alert('Clear unused final fixtures before removing a slot.');return}cupData.games=cupData.games.filter(g=>!excess.includes(g));a.pop()}cupData.groups[k]=a;cupEnsureGroupGames();cupSave();render()}
 function cupSetPot(i,v){cupData.pots[i]=v.split(/[\n,]+/).map(x=>x.trim()).filter(Boolean);cupSave()}
 function cupSetGame(i,key,v){
  const g=cupData.games[i];if(!g)return;
  if(key==='home'||key==='away'){
-  const next={...g,[key]:v},members=cupData.groups[g.group]||[];
+  if(cupScored(g)&&g[key]!==v){alert('Clear scores before changing a matchup.');render();return} const next={...g,[key]:v},members=cupData.groups[g.group]||[];
   if(v&&!members.includes(v)){alert('Choose a team assigned to Group '+g.group+'.');render();return}
   if(next.home&&next.away){
    if(next.home===next.away){alert('A team cannot play itself.');render();return}
@@ -423,7 +414,7 @@ function cupSetGame(i,key,v){
   }
   for(const t of [next.home,next.away].filter(Boolean)){
    const played=cupData.games.filter((other,j)=>j!==i&&other.group===g.group&&(other.home===t||other.away===t)).length;
-   if(played>=3){alert(t+' already has three group games.');render();return}
+   if(played>=cupSize(g.group)-1){alert(t+' already has the maximum group games.');render();return}
   }
   g[key]=v;cupSave();render();return;
  }
@@ -432,7 +423,7 @@ function cupSetGame(i,key,v){
  else g[key]=v;
  cupSave();
 }
-function cupExport(){if(!cupIsComplete()){alert('All 48 valid group-stage games must be entered before publishing.');return}download('tmfl-in-season-cup.json',JSON.stringify({...cupData,unlocked:true},null,2))}
+function cupExport(){if(!cupIsComplete()){alert('All required valid group-stage games must be entered before publishing.');return}download('tmfl-in-season-cup.json',JSON.stringify({...cupData,unlocked:true},null,2))}
 
 function tmflCupBracket(d){
  const counts=[8,8,8,4,2,1],labels=['Opening Round','Second Round','Third Round','Quarterfinals','Semifinals','Championship'];
@@ -445,7 +436,7 @@ function tmflCupBracketHTML(d,editable){
  const line=k=>{const t=m.data[k]||{},seed=t.seed??'',team=t.team||'',score=t.score??'';return '<div class="tmfl-cup-team">'+(editable?'<input aria-label="Seed" title="Seed" type="number" min="1" max="32" placeholder="#" value="'+escCup(seed)+'" onchange="cupSetKnockout(\''+m.id+'\',\''+k+'\',\'seed\',this.value)" style="width:43px;min-width:43px">':'<span class="tmfl-cup-seed">'+escCup(seed||'–')+'</span>')+(editable?'<input aria-label="Team" title="Team" placeholder="Team" value="'+escCup(team)+'" onchange="cupSetKnockout(\''+m.id+'\',\''+k+'\',\'team\',this.value)" style="flex:1;min-width:75px;width:100px">':'<span class="tmfl-cup-name">'+escCup(team||'TBD')+'</span>')+(editable?'<input aria-label="Score" title="Score" type="number" min="0" placeholder="–" value="'+escCup(score)+'" onchange="cupSetKnockout(\''+m.id+'\',\''+k+'\',\'score\',this.value)">':'<strong class="tmfl-cup-score">'+escCup(score===''?'–':score)+'</strong>')+'</div>'};
  return '<div class="tmfl-cup-match"><small>'+m.id+'</small>'+line('a')+line('b')+(editable?cupOTControls(m.id,m.data):'')+'</div>';
  }).join('')+'</div>').join('');
- return '<section class="panel"><h3>32-Team Knockout Bracket</h3><p>Manual bracket · seeds 1–8 enter Round 3 · 9–16 enter Round 2 · 17–32 enter Round 1. All teams, seeds and scores are entered by the Commissioner.</p><div class="tmfl-cup-scroll"><div class="tmfl-cup-bracket">'+html+'</div></div></section>';
+ return '<section class="panel"><h3>32-Team Knockout Bracket (top 32 qualify)</h3><p>Manual bracket · seeds 1–8 enter Round 3 · 9–16 enter Round 2 · 17–32 enter Round 1. All teams, seeds and scores are entered by the Commissioner.</p><div class="tmfl-cup-scroll"><div class="tmfl-cup-bracket">'+html+'</div></div></section>';
 }
 function cupOTGame(id){return cupData.games.find(g=>g.id===id)||(cupData.knockout||{})[id]}
 function cupSetOT(id,checked){let g=cupOTGame(id);if(!g&&id.startsWith('CUP-K')){cupData.knockout=cupData.knockout||{};g=cupData.knockout[id]={}}if(!g)return;g.ot=checked;if(!checked)delete g.otCount;cupSave();render()}
@@ -458,12 +449,12 @@ function cupEditorView(){
  const groups=cupGroupNames.map(k=>{
   const members=(cupData.groups[k]||[]).filter(Boolean);
   const choices=value=>'<option value="">Select team</option>'+members.map(t=>'<option value="'+cupEsc(t)+'" '+(t===value?'selected':'')+'>'+cupEsc(t)+'</option>').join('');
-  const counts=members.map(t=>{const n=cupData.games.filter(g=>g.group===k&&(g.home===t||g.away===t)).length;return '<span style="display:inline-block;margin:4px;padding:5px 9px;border:1px solid #777;border-radius:5px">'+cupEsc(t)+': '+n+'/3 games'+(n===3?' (complete)':'')+'</span>'}).join('');
-  const assignments=Array.from({length:4},(_,i)=>'<label style="display:inline-block;margin:8px">Team '+(i+1)+' <select onchange="cupSetGroup(\''+k+'\','+i+',this.value);render()">'+teamOptions((cupData.groups[k]||[])[i])+'</select></label>').join('');
-  const fixtures=Array.from({length:6},(_,j)=>{const g=cupGroupGame(k,j+1),i=cupData.games.indexOf(g);return '<div class="game" style="padding:10px;margin:8px 0"><strong>'+g.id+'</strong> <label>Away <select onchange="cupSetGame('+i+',\'away\',this.value)">'+choices(g.away)+'</select></label> <label>Home <select onchange="cupSetGame('+i+',\'home\',this.value)">'+choices(g.home)+'</select></label> <label>Week <input type="number" min="1" max="18" value="'+g.week+'" onchange="cupSetGame('+i+',\'week\',this.value)" style="width:65px"></label> <label>TV <select onchange="cupSetGame('+i+',\'slot\',this.value)">'+'<option value="" '+(!cupSlotLabel(g.slot)?'selected':'')+'>Not Televised</option>'+CUP_SLOTS.map(t=>'<option '+(t===cupSlotLabel(g.slot)?'selected':'')+'>'+t+'</option>').join('')+'</select></label> <label>Away score <input type="number" min="0" value="'+(g.awayScore??'')+'" onchange="cupSetGame('+i+',\'awayScore\',this.value)" style="width:65px"></label> <label>Home score <input type="number" min="0" value="'+(g.homeScore??'')+'" onchange="cupSetGame('+i+',\'homeScore\',this.value)" style="width:65px"></label>'+cupOTControls(g.id,g)+'</div>'}).join('');
-  return '<div class="panel"><h3>Group '+k+'</h3><p>Assign four teams, then choose the matchups for GRP'+k+'01–GRP'+k+'06.</p>'+assignments+'<p>Each team plays exactly three games, against each of the other teams once.</p><div>'+counts+'</div><h4>Group '+k+' Games</h4>'+fixtures+'</div>';
+  const counts=members.map(t=>{const n=cupData.games.filter(g=>g.group===k&&(g.home===t||g.away===t)).length;return '<span style="display:inline-block;margin:4px;padding:5px 9px;border:1px solid #777;border-radius:5px">'+cupEsc(t)+': '+n+'/'+(cupSize(k)-1)+' games'+(n===cupSize(k)-1?' (complete)':'')+'</span>'}).join('');
+  const assignments=Array.from({length:cupSize(k)},(_,i)=>'<label style="display:inline-block;margin:8px">Team '+(i+1)+' <select onchange="cupSetGroup(\''+k+'\','+i+',this.value);render()">'+teamOptions((cupData.groups[k]||[])[i])+'</select></label>').join('');
+  const fixtures=Array.from({length:cupRequired(k)},(_,j)=>{const g=cupGroupGame(k,j+1),i=cupData.games.indexOf(g);return '<div class="game" style="padding:10px;margin:8px 0"><strong>'+g.id+'</strong> <label>Away <select onchange="cupSetGame('+i+',\'away\',this.value)">'+choices(g.away)+'</select></label> <label>Home <select onchange="cupSetGame('+i+',\'home\',this.value)">'+choices(g.home)+'</select></label> <label>Week <input type="number" min="1" max="18" value="'+g.week+'" onchange="cupSetGame('+i+',\'week\',this.value)" style="width:65px"></label> <label>TV <select onchange="cupSetGame('+i+',\'slot\',this.value)">'+'<option value="" '+(!cupSlotLabel(g.slot)?'selected':'')+'>Not Televised</option>'+CUP_SLOTS.map(t=>'<option '+(t===cupSlotLabel(g.slot)?'selected':'')+'>'+t+'</option>').join('')+'</select></label> <label>Away score <input type="number" min="0" value="'+(g.awayScore??'')+'" onchange="cupSetGame('+i+',\'awayScore\',this.value)" style="width:65px"></label> <label>Home score <input type="number" min="0" value="'+(g.homeScore??'')+'" onchange="cupSetGame('+i+',\'homeScore\',this.value)" style="width:65px"></label>'+cupOTControls(g.id,g)+'</div>'}).join('');
+  return '<div class="panel"><h3>Group '+k+'</h3><p>Assign teams, then choose matchups.</p>'+assignments+'<button onclick="cupResize(\''+k+'\',1)">Add team slot</button> <button onclick="cupResize(\''+k+'\',-1)">Remove last slot</button><p>Each team plays every other team once.</p><div>'+counts+'</div><h4>Group '+k+' Games</h4>'+fixtures+'</div>';
  }).join('');
- return '<div class="panel"><h2>TMFL In-Season Cup Editor</h2><p>Manual group assignments and game matchups · 8 groups · 48 group games · 31 knockout games.</p><p><strong>Fan Portal schedule status:</strong> '+(cupIsComplete()?'Ready to publish':'Incomplete — assign six unique matchups per group, with each team playing three games')+'</p><label>Starting TMFL week (1–10) <input type="number" min="1" max="10" value="'+cupData.startWeek+'" onchange="cupData.startWeek=Math.max(1,Math.min(10,Number(this.value)||1));cupSave();render()"></label><p>Each group has six individually editable games. Home and away dropdowns show only that group\'s assigned teams.</p><button onclick="cupExport()">Download Cup JSON</button><p class="muted">Publish via Publish to GitHub → League → In-Season Cup.</p></div>'+groups+tmflCupBracketHTML(cupData,true);
+ return '<div class="panel"><h2>TMFL In-Season Cup Editor</h2><p>Manual group assignments and game matchups · 8 groups · adjustable group games · 31 knockout games.</p><p><strong>Fan Portal schedule status:</strong> '+(cupIsComplete()?'Ready to publish':'Incomplete — assign every unique matchup in each group')+'</p><label>Starting TMFL week (1–10) <input type="number" min="1" max="10" value="'+cupData.startWeek+'" onchange="cupData.startWeek=Math.max(1,Math.min(10,Number(this.value)||1));cupSave();render()"></label><p>Each group has individually editable games. Home and away dropdowns show only that group\'s assigned teams.</p><button onclick="cupExport()">Download Cup JSON</button><p class="muted">Publish via Publish to GitHub → League → In-Season Cup.</p></div>'+groups+tmflCupBracketHTML(cupData,true);
 }
 function render(){document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));document.getElementById('app').innerHTML=({'in-season-cup':cupEditorView,home:homeView,games:gamesView,standings:standingsView,accuracy:accuracyView,recaps:recapsView,history:historyView,rules:rulesView,"tmsn-editor":tmsnEditorView,"fan-features":fanFeaturesView,"news-editor":tmflNewsEditorView,"hof-editor":()=>tmflCMSView("hof-editor"),"team-profile-editor":()=>tmflCMSView("team-profile-editor"),"ir-suspensions-editor":()=>tmflCMSView("ir-suspensions-editor"),"notification-editor":()=>tmflCMSView("notification-editor"),"poll-editor":()=>tmflCMSView("poll-editor"),"news-plus-editor":()=>tmflCMSView("news-plus-editor"),"awards-editor":()=>tmflCMSView("awards-editor"),"playoff-manager":()=>tmflCMSView("playoff-manager"),"engagement-editor":()=>tmflCMSView("engagement-editor"),"publishing-center":()=>tmflCMSView("publishing-center"),"roster-editor":rosterEditorView,"draft-central":draftEditorView,"expansion-draft-editor":()=>tmflCMSView("expansion-draft-editor"),schedule:scheduleView,admin:adminView,"history-editor":historyEditorView,"final-standings":finalStandingsView,picture:playoffPictureView,playoffs:playoffsView,"playoff-results":playoffResultsView,brackets:bracketsView}[tab])()}
 
@@ -962,7 +953,7 @@ async function publish(kind){if(busy)return;busy=true;token=input.value.trim();s
   for(const key of Object.keys(TMFL_CMS_CONFIG))writes.push(cmsFile(key));
   if(d.cup)writes.push(['tmfl-in-season-cup.json',()=>d.cup]);
   break;
- case 'cup':if(!d.cup)throw Error('Enter all 48 valid group-stage games before publishing the Cup.');writes.push(['tmfl-in-season-cup.json',()=>d.cup]);break;
+ case 'cup':if(!d.cup)throw Error('Enter all required valid group-stage games before publishing the Cup.');writes.push(['tmfl-in-season-cup.json',()=>d.cup]);break;
  case 'expansion-draft':writes.push(cmsFile('expansion-draft-editor'));break;
  case 'draft':writes.push(['tmfl-draft.json',()=>d.draft]);break;
  case 'rosters':writes.push(['tmfl-rosters.json',()=>d.rosters]);break;
